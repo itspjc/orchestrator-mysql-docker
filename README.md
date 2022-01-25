@@ -66,6 +66,7 @@ Run docker container of mysql-server
 docker run -d --name=mysql-node$NODE \
 	--net=host \
 	--hostname=mysql-node$NODE \
+	--restart always \
 	-p 3306:3306 \
 	-v $PWD/d$NODE:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=mypass \
 	mysql/mysql-server:8.0 \
