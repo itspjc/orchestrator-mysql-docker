@@ -1,26 +1,30 @@
 # orchestrator-mysql-ha
 
 
+# Environments
+- Ubuntu 20.04
+- Docker engine (20.10.12)
+	- [Install Docker](https://docs.docker.com/engine/install/ubuntu/)
 
 # Setup
 
-GCP에서 VM3개를 생성함.
+Prepare 3VM to setup mysql and orchestrator with docker engine. Please install docker engine on all VMs.
 
-- **mysql-node1**: orchestrator, mysql-server
+- **mysql-node1**: mysql-server (Master)
 
-  - 10.178.0.7 (34.64.119.151)
+  - 172.38.101.110
 
-- **mysql-node2**: mysql-server
+- **mysql-node2**: mysql-server (Slave)
 
-  - 10.178.0.8 (34.64.153.188)
+  - 172.38.101.198
 
-- **mysql-node3**: mysql-server
+- **orchestrator**: orchestrator
 
-  - 10.178.0.9 (34.64.153.188)
+  - 172.37.101.203
 
     
 
-## Install orchestrator (mysql-node1)
+## Install orchestrator (In orchestrator VM)
 
 - download and build orchestrator image
 
@@ -31,11 +35,6 @@ cp docker/Dockerfile .
 docker build -t orchestrator:latest .
 ```
 
-- check connection to webpage of orchestrator
-  - http://34.64.119.151:3000/
-
-
-
 - run
 
 ```
@@ -44,7 +43,8 @@ docker run -d -p 3000:3000 \
 	--name orchestrator \
 	orchestrator:latest
 ```
-
+- check connection to webpage of orchestrator
+  - http://34.64.119.151:3000/
 
 
 ## setup mysql server (mysql-node1~3)
