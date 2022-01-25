@@ -18,7 +18,7 @@ Prepare 3VM to setup mysql and orchestrator with docker engine. Please install d
 
   - 172.38.101.198
 
-- **orchestrator**: orchestrator
+- **orchestrator-vm**: orchestrator
 
   - 172.37.101.203
 
@@ -35,30 +35,35 @@ cp docker/Dockerfile .
 docker build -t orchestrator:latest .
 ```
 
-- run
+- create custom config file
+create **orchestrator.conf.json** for custom config file using my `orchestrator.conf.json`.
+I modified only `HostnameResolveMethod` option because I don't need to resolve hostname. Please refer this [link](https://github.com/openark/orchestrator/blob/master/docs/configuration-discovery-resolve.md)
+```
+"HostnameResolveMethod": "none"
+```
 
+- run docker container
 ```
 docker run -d -p 3000:3000 \
 	-v ${PWD}/orchestrator.conf.json:/etc/orchestrator.conf.json \
 	--name orchestrator \
 	orchestrator:latest
 ```
-- check connection to webpage of orchestrator
-  - http://34.64.119.151:3000/
+- check connection to webpage of orchestrator. Maybe It displays message of 'No clusters found'. Good.
+  - http://172.37.101.203:3000/
 
 
-## setup mysql server (mysql-node1~3)
+## setup mysql server (both mysql-node1 and mysql-node2)
 
 When VM's hostname  is mysql-node`X` , set environment variable as `NODE=X`
-
 ```
-NODE=X # 1~3
+NODE=X # 1~2
 ```
 
 Run docker container of mysql-server
 
 ```
-docker run -d --name=mysql$NODE \
+docker run -d --name=mysql-node$NODE \
 	--net=host \
 	--hostname=mysql-node$NODE \
 	-p 3306:3306 \
@@ -77,69 +82,68 @@ docker run -d --name=mysql$NODE \
 ## mysql-node1 (master node)
 
 The MySQL containers must be with status **(healthy)** and **NOT** ***(health: starting)*** to go the next step.
-
-Setting master replication in **node1**:
+Setting master replication in **mysql-node1**:
 
 ```
-docker exec -it mysql1 mysql -uroot -pmypass \
+docker exec -it mysql-node1 mysql -uroot -pmypass \
 	-e "CREATE USER 'repl'@'%' IDENTIFIED WITH mysql_native_password BY 'slavepass';" \
 	-e "GRANT REPLICATION SLAVE ON *.* TO 'repl'@'%';" \
 	-e "SHOW MASTER STATUS;"
 ```
 
+## mysql-node2 (slave nodes)
 
-
-## mysql-node2~3 (slave nodes)
-
-When master host is `mysql-node1`, this command is valid. If you have different master host, please change MASTER_HOST. Note that It is the same command after failover recovery.
-
-
+When master host is `mysql-node1`, this command is valid. If you have different master host, please change MASTER_HOST. **Note that It is the same command after failover recovery.**
 
 ```
-docker exec -it mysql$NODE mysql -uroot -pmypass \
-	-e "CHANGE MASTER TO MASTER_HOST='mysql-node1', MASTER_PORT=3306, \
+docker exec -it mysql-node$NODE mysql -uroot -pmypass \
+	-e "CHANGE MASTER TO MASTER_HOST='172.38.101.110', MASTER_PORT=3306, \
         MASTER_USER='repl', MASTER_PASSWORD='slavepass', MASTER_AUTO_POSITION = 1;"
 ```
 
+Start SLAVE.
 ```
-docker exec -it mysql$NODE mysql -uroot -pmypass -e "START SLAVE;"
+docker exec -it mysql-node$NODE mysql -uroot -pmypass -e "START SLAVE;"
 ```
 
+(Option) If you want to stop Slave, please use this command.
+```
+docker exec -it mysql-node$NODE mysql -uroot -pmypass -e "STOP SLAVE;"
+```
 
 
 - Checking whether slaves are replicating. ***Slave_IO_Running: Yes*** and ***Slave_SQL_Running: Yes***. If Slave_IO_Running stucks in Connecting status, try restarting mysql-server container.
 
 ```
-docker exec -it mysql2 mysql -uroot -pmypass -e "SHOW SLAVE STATUS\G"
-
-docker exec -it mysql3 mysql -uroot -pmypass -e "SHOW SLAVE STATUS\G"
+docker exec -it mysql-node2 mysql -uroot -pmypass -e "SHOW SLAVE STATUS\G"
 ```
 
 
+## Setup Orchestrator 
 
-
-
-## mysql-node1 (master node: Orchestrator)
-
+### On mysql-node1
 Grant access to the Orchestrator so it can see the topology:
 
 ```
-docker exec -it mysql1 mysql -uroot -pmypass \
+docker exec -it mysql-node1 mysql -uroot -pmypass \
 	-e "CREATE USER 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_password';" \
 	-e "GRANT SUPER, PROCESS, REPLICATION SLAVE, RELOAD ON *.* TO 'orc_client_user'@'%';" \
 	-e "GRANT SELECT ON mysql.slave_master_info TO 'orc_client_user'@'%';"
 ```
 
+### On orchestrator-vm
 
+Please replace ip `172.38.101.110` with your master ip (mysql-node1).
+Now it's time to run the commands in Orchestrator container so it can find the topology:
 
+To discover the topology:
 ```
-docker exec -it orchestrator ./orchestrator -c discover -i 10.178.0.7:3306 --debug
-docker exec -it orchestrator ./orchestrator -c topology -i 10.178.0.7:3306
+docker exec -it orchestrator ./orchestrator -c discover -i 172.38.101.110:3306 --debug
 ```
-
-
-
-
+To see the topology:
+```
+docker exec -it orchestrator ./orchestrator -c topology -i 172.38.101.110:3306
+```
 
 ### Ref
 
